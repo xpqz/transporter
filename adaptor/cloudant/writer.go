@@ -1,0 +1,35 @@
+package cloudant
+
+// The Cloudant Writer uses the Uploader functionality in the Cloudant
+// client library. It spreads uploads across multiple go routines and
+// utilises the efficient _bulk_docs API endpoint to batch uploads. It
+// also sets a timeout after which the queue is drained regardless of
+// the number of items present.
+
+import (
+	"github.com/compose/transporter/client"
+	"github.com/compose/transporter/message"
+	cdt "github.ibm.com/cloudant/go-cloudant"
+)
+
+var (
+	_ client.Writer = &Writer{}
+)
+
+// Writer implements client.Writer for use with Cloudant
+type Writer struct {
+	bulker *cdt.Uploader
+}
+
+func newWriter(db *cdt.Database, batchSize int, timeout int) *Writer {
+	return &Writer{db.Bulk(batchSize, timeout)}
+}
+
+// Write adds a message to the upload queues. These will be uploaded when full,
+// or if the max allowable time since the previous upload is exceeded.
+func (w *Writer) Write(msg message.Msg) func(client.Session) (message.Msg, error) {
+	return func(s client.Session) (message.Msg, error) {
+		w.bulker.Upload(msg.Data())
+		return msg, nil
+	}
+}
