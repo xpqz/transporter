@@ -10,13 +10,16 @@ import (
 const (
 	sampleConfig = `{
    "uri": "${CLOUDANT_URI}",
-   //  "uri": "cloudant://{username}:{password}@{username}.cloudant.com/{database}",
+   //  "uri": "cloudant://...",
    //  "username": "username",
    //  "password": "password",
    //  "database": "database"
+   //  "batchsize": int
+   //  "timeout": int
+   //  "seqInterval": int
 }`
 
-	description = "a Cloudant adaptor that functions as both a source and a sink"
+	description = "a Cloudant/CouchDB adaptor that functions as both source and sink"
 )
 
 var (
@@ -26,13 +29,14 @@ var (
 // Cloudant is an adaptor that reads and writes records to Cloudant (https://cloudant.com/)
 type cloudant struct {
 	adaptor.BaseConfig
-	Tail      bool   `json:"tail"`
-	Database  string `json:"database"`
-	username  string
-	password  string
-	batchsize int
-	timeout   int
-	cl        *Client
+	Tail        bool   `json:"tail"`
+	Database    string `json:"database"`
+	username    string
+	password    string
+	batchsize   int
+	timeout     int
+	seqInterval int
+	cl          *Client
 }
 
 func init() {
@@ -52,6 +56,7 @@ func (c *cloudant) Client() (client.Client, error) {
 		WithPassword(c.password),
 		WithBatchSize(c.batchsize),
 		WithTimeout(c.timeout),
+		WithSeqInterval(c.seqInterval),
 	)
 	if err != nil {
 		return nil, err
@@ -61,7 +66,7 @@ func (c *cloudant) Client() (client.Client, error) {
 }
 
 func (c *cloudant) Reader() (client.Reader, error) {
-	return newReader(c.Tail), nil
+	return newReader(c.Tail, c.seqInterval), nil
 }
 
 func (c *cloudant) Writer(done chan struct{}, wg *sync.WaitGroup) (client.Writer, error) {

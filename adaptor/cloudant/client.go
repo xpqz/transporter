@@ -15,21 +15,22 @@ const (
 	uploadQueueTimeout = 5
 )
 
-var (
+var ( // Ensure that cloudant.Client implements Client and Closer
 	_ client.Client = &Client{}
 	_ client.Closer = &Client{}
 )
 
 // Client creates and holds the session to Cloudant
 type Client struct {
-	client    *cdt.CouchClient
-	database  *cdt.Database
-	dbName    string
-	uri       string
-	username  string
-	password  string
-	batchsize int // sink-only
-	timeout   int // sink-only
+	client      *cdt.CouchClient
+	database    *cdt.Database
+	dbName      string
+	uri         string
+	username    string
+	password    string
+	batchsize   int // sink-only
+	timeout     int // sink-only
+	seqInterval int // source only
 }
 
 // Session wraps the access points for consumption by Reader and Writer
@@ -103,6 +104,16 @@ func WithTimeout(secs int) ClientOptionFunc {
 	}
 }
 
+// WithSeqInterval defines the frequency of sequence id generation in
+// the changes feed. Setting this to a number > 0 vastly improves performance
+// at the cost of coarser granularity in terms of resumption.
+func WithSeqInterval(interval int) ClientOptionFunc {
+	return func(c *Client) error {
+		c.seqInterval = interval
+		return nil
+	}
+}
+
 // WithUser defines the username
 func WithUser(name string) ClientOptionFunc {
 	return func(c *Client) error {
@@ -142,7 +153,7 @@ func (c *Client) Connect() (client.Session, error) {
 }
 
 // Close fulfills the Closer interface and takes care of cleaning up the session
-func (c *Client) Close() {
+func (c Client) Close() {
 	if c.database != nil {
 		c.client.LogOut()
 		c.client.Stop()

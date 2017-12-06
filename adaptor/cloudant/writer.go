@@ -8,12 +8,14 @@ package cloudant
 
 import (
 	"github.com/compose/transporter/client"
+	"github.com/compose/transporter/log"
 	"github.com/compose/transporter/message"
 	cdt "github.ibm.com/cloudant/go-cloudant"
 )
 
 var (
 	_ client.Writer = &Writer{}
+	_ client.Closer = &Writer{}
 )
 
 // Writer implements client.Writer for use with Cloudant
@@ -22,7 +24,16 @@ type Writer struct {
 }
 
 func newWriter(db *cdt.Database, batchSize int, timeout int) *Writer {
+	log.With("db", db.Name).
+		With("batchsize", batchSize).
+		With("timeout", timeout).
+		Infoln("BULKER STARTING")
 	return &Writer{db.Bulk(batchSize, timeout)}
+}
+
+// Close is called by client.Close() when it receives on the done channel.
+func (w *Writer) Close() {
+	w.bulker.Stop()
 }
 
 // Write adds a message to the upload queues. These will be uploaded when full,
