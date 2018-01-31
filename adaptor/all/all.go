@@ -2,6 +2,7 @@ package all
 
 import (
 	// Initialize all adapters by importing this package
+	_ "github.com/compose/transporter/adaptor/cloudant"
 	_ "github.com/compose/transporter/adaptor/elasticsearch"
 	_ "github.com/compose/transporter/adaptor/file"
 	_ "github.com/compose/transporter/adaptor/mongodb"
