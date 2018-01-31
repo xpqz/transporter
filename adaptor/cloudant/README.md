@@ -10,11 +10,13 @@ r = cloudant({
    "uri": "${CLOUDANT_URI}",
    //  "username": "username",
    //  "password": "password",
-   //  "database": "database"
-   //  "batchsize": int         // Sink only
-   //  "timeout": int           // Sink only
-   //  "seqInterval": int       // Source only
-})
+   //  "database": "database",
+   //  "batchsize": int,         // Sink only
+   //  "batchTimeout": int,      // Sink only
+   //  "seqInterval": int,       // Source only
+   //  "newEdits": bool,         // Sink only
+   //  "tail": bool,             // Source only
+});
 ```
 
 ## Notes
@@ -22,12 +24,13 @@ r = cloudant({
 A Cloudant database stores JSON documents. A document is stored as a revision tree
 keyed on a pair of fields `_id` and `_rev` (both strings) that together uniquely
 identifies a document revision. Only the leaves of the tree are guaranteed to be
-present (in that way it's conceptually different from say Git).
+present in terms of payload (in that way it's conceptually different from say Git).
 
-Inserts, updates and deletes are all implemented as inserts. An update is generating
-a new, complete revision under a new `_rev` but the same `_id` as the parent revision
-being modified. A deletion is the same, but with the body discarded, and an additional
-field `_deleted: true`. This new revision is called a `tombstone`.
+In Cloudant/CouchDB, inserts, updates and deletes are all implemented as inserts.
+An update is generating a new, complete revision under a new `_rev` but the same
+`_id` as the parent revision being modified. A deletion is the same, but with the
+body discarded, and an additional field `_deleted: true`. This new revision is
+called a `tombstone`.
 
 If no `_id` is given when inserting a document into a Cloudant database, one will be
 automatically generated. The `_rev` is generated, too, and is in simplified terms a
@@ -41,14 +44,31 @@ update (delete) will be rejected as a conflict.
 If you use the Cloudant adaptor, you need to ensure that each message destined for
 a Cloudant sink needs to have both an `_id` and a `_rev` in order to update or delete.
 Inserts need neither, but an `_id` may be provided. If your source has the concept of
-a primary key, you may be able to use that as the `_id` for the Cloudant sink.
+a primary key, you may want to use that as the `_id` for the Cloudant sink.
 
 The Cloudant sink is efficiently implemented across multiple worker routines that
-group writes into batches. The batch size is a configuration, as is the `timeout` which
-represents the max time (seconds) we will allow a message to be waiting in the batch queue
-before it's sent.
+group writes into batches. The batch size is a configuration, as is the
+`batchTimeout` which represents the max time (seconds) we will allow a message
+to be waiting in the batch queue before it's sent.
 
 The Cloudant sink makes no attempts to handle update conflicts, should they occur.
+
+If you're running a Cloudant source to a Cloudant sink you need to set `newEdits` to
+`false` on the sink in order to preserve `_rev` ids.
+
+The bulk loading has three configurable options, although the Cloudant adapter
+only exposes two. Firstly the batch size in terms of number of documents which
+each worker is allowed to queue. Secondly the max time between uploads, in seconds,
+and thirdly, the un-exposed buffer size. The third option is fixed to 1Mb which is
+the upper request size limit in Cloudant.
+
+This means that a worker process will submit its queue to the Cloudant sink if
+the total number of documents it holds is greater than or equal to `batchsize` or
+the number of seconds since its last upload exceeds `batchTimeout` s (set this to -1
+to disable the timed uploads), or if the total encoded body size of the upload
+request when adding a new document to the queue would have exceeded 1Mb.
+
+Note that any single document exceeding 1Mb in size will be rejected.
 
 ## Source
 
@@ -70,7 +90,10 @@ It's worth noting that the Cloudant changes feed cannot be relied upon to be ord
 It multiplexes streams from different shards, so changes may appear out of order.
 
 In Tail mode, the adaptor will keep running, and will resume from the last known good
-point if the far end exits. It will, however, not persist this state. If you halt
-restart the adaptor, it will start from the beginning. Transforms should be aware
-of this.
+point if the far end exits. It will, however, not persist this state, at the time of
+writing. If you halt restart the adaptor, it will start from the beginning. Transforms
+should be aware of this.
 
+When using a Cloudant source, you will also pick up any design documents (documents
+where the `_id` starts with `_design/`) which describes secondary indexes. If you are
+moving documents to a non-Cloudant sink, you may want to filter these out.

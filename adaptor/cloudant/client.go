@@ -3,8 +3,8 @@ package cloudant
 import (
 	"net/url"
 
+	cdt "github.com/cloudant-labs/go-cloudant"
 	"github.com/compose/transporter/client"
-	cdt "github.ibm.com/cloudant/go-cloudant"
 )
 
 const (
@@ -22,15 +22,17 @@ var ( // Ensure that cloudant.Client implements Client and Closer
 
 // Client creates and holds the session to Cloudant
 type Client struct {
-	client      *cdt.CouchClient
-	database    *cdt.Database
-	dbName      string
-	uri         string
-	username    string
-	password    string
-	batchsize   int // sink-only
-	timeout     int // sink-only
-	seqInterval int // source only
+	client       *cdt.CouchClient
+	database     *cdt.Database
+	dbName       string
+	uri          string
+	username     string
+	password     string
+	batchsize    int  // sink only
+	batchTimeout int  // sink only
+	seqInterval  int  // source only
+	tail         bool // source only
+	newEdits     bool // sink only
 }
 
 // Session wraps the access points for consumption by Reader and Writer
@@ -63,7 +65,8 @@ type ClientOptionFunc func(*Client) error
 func NewClient(options ...ClientOptionFunc) (*Client, error) {
 	// Set up the client
 	c := &Client{
-		uri: DefaultURI,
+		uri:      DefaultURI,
+		newEdits: true, // only false for Cloudant -> Cloudant pipeline
 	}
 
 	// Run the options on it
@@ -72,6 +75,11 @@ func NewClient(options ...ClientOptionFunc) (*Client, error) {
 			return nil, err
 		}
 	}
+
+	if err := c.initConnection(); err != nil {
+		return nil, err
+	}
+
 	return c, nil
 }
 
@@ -95,11 +103,11 @@ func WithBatchSize(batchsize int) ClientOptionFunc {
 	}
 }
 
-// WithTimeout defines the max number of seconds to hold the write cache
+// WithBatchTimeout defines the max number of seconds to hold the write cache
 // regardless of the number of items
-func WithTimeout(secs int) ClientOptionFunc {
+func WithBatchTimeout(secs int) ClientOptionFunc {
 	return func(c *Client) error {
-		c.timeout = secs
+		c.batchTimeout = secs
 		return nil
 	}
 }
@@ -118,6 +126,22 @@ func WithSeqInterval(interval int) ClientOptionFunc {
 func WithUser(name string) ClientOptionFunc {
 	return func(c *Client) error {
 		c.username = name
+		return nil
+	}
+}
+
+// WithNewEdits tells sink to use replicator mode if false
+func WithNewEdits(state bool) ClientOptionFunc {
+	return func(c *Client) error {
+		c.newEdits = state
+		return nil
+	}
+}
+
+// WithTail tells source if it should use tail mode
+func WithTail(state bool) ClientOptionFunc {
+	return func(c *Client) error {
+		c.tail = state
 		return nil
 	}
 }
@@ -161,6 +185,7 @@ func (c Client) Close() {
 }
 
 func (c *Client) initConnection() error {
+
 	uri, _ := url.Parse(c.uri)
 
 	// If we don't have a database already, try to grab it from the URI

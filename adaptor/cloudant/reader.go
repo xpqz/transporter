@@ -6,10 +6,10 @@ package cloudant
 import (
 	"strings"
 
+	cdt "github.com/cloudant-labs/go-cloudant"
 	"github.com/compose/transporter/client"
 	"github.com/compose/transporter/message"
 	"github.com/compose/transporter/message/ops"
-	cdt "github.ibm.com/cloudant/go-cloudant"
 )
 
 var (

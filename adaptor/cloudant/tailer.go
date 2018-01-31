@@ -6,11 +6,11 @@ package cloudant
 // id generation.
 
 import (
+	cdt "github.com/cloudant-labs/go-cloudant"
 	"github.com/compose/transporter/client"
 	"github.com/compose/transporter/log"
 	"github.com/compose/transporter/message"
 	"github.com/compose/transporter/message/ops"
-	cdt "github.ibm.com/cloudant/go-cloudant"
 )
 
 var (
@@ -52,6 +52,7 @@ func (t *Tailer) Read(resumeMap map[string]client.MessageSet, filterFn client.Ns
 				log.With("db", session.dbName).
 					With("err", err).
 					Infoln("failed to open changes feed")
+				return
 			}
 			for {
 				select {

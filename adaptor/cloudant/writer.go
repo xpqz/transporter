@@ -7,10 +7,10 @@ package cloudant
 // the number of items present.
 
 import (
+	cdt "github.com/cloudant-labs/go-cloudant"
 	"github.com/compose/transporter/client"
 	"github.com/compose/transporter/log"
 	"github.com/compose/transporter/message"
-	cdt "github.ibm.com/cloudant/go-cloudant"
 )
 
 var (
@@ -18,17 +18,28 @@ var (
 	_ client.Closer = &Writer{}
 )
 
+const bufferSize = 1024 * 1024 // Cloudant has a max request size of 1M
+
 // Writer implements client.Writer for use with Cloudant
 type Writer struct {
 	bulker *cdt.Uploader
 }
 
-func newWriter(db *cdt.Database, batchSize int, timeout int) *Writer {
+func newWriter(db *cdt.Database, batchSize int, batchTimeout int, newEdits bool) *Writer {
 	log.With("db", db.Name).
 		With("batchsize", batchSize).
-		With("timeout", timeout).
+		With("batchTimeout", batchTimeout).
 		Infoln("BULKER STARTING")
-	return &Writer{db.Bulk(batchSize, timeout)}
+	bulker := db.Bulk(batchSize, bufferSize, batchTimeout)
+	// NewEdits == false is a signal to the bulker to run in replicator mode,
+	// forcing documents even when they result in conflicts. This is required
+	// in order to preserve _revs coming from a Cloudant source if running
+	// transporter Cloudant => Cloudant. The default is true, meaning that _revs
+	// are generated, rather than preserved.
+	if newEdits == false {
+		bulker.NewEdits = false
+	}
+	return &Writer{bulker}
 }
 
 // Close is called by client.Close() when it receives on the done channel.
