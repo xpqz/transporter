@@ -43,9 +43,9 @@ func TestWriter(t *testing.T) {
 	}()
 
 	for i := 0; i < 10; i++ {
-		msg := message.From(ops.Insert, "bulk", map[string]interface{}{"foo": i, "i": i})
+		msg := message.From(ops.Update, "bulk", map[string]interface{}{"foo": i, "i": i})
 		if _, err := wr.Write(message.WithConfirms(confirms, msg))(s); err != nil {
-			t.Errorf("unexpected Insert error, %s", err)
+			t.Errorf("Write error: %s", err)
 		}
 	}
 }
