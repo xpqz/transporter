@@ -12,6 +12,7 @@ const (
 	DefaultURI = "cloudant://127.0.0.1:5984"
 )
 
+// Client implements client.Client and client.Closer
 var (
 	_ client.Client = &Client{}
 	_ client.Closer = &Client{}
@@ -21,6 +22,7 @@ var (
 type Client struct {
 	client   *cdt.CouchClient
 	database *cdt.Database
+	bulker   *cdt.Uploader
 	dbName   string
 	uri      string
 	username string
@@ -131,8 +133,9 @@ func (c *Client) initConnection() error {
 	}
 	c.client = cl
 
-	// Select the database
-	database, err := cl.Get(c.dbName)
+	// Select the database, creating it if it's not there: both source
+	// and sink uses this.
+	database, err := cl.GetOrCreate(c.dbName)
 	if err != nil {
 		return client.ConnectError{Reason: err.Error()}
 	}

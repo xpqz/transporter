@@ -9,7 +9,7 @@ import (
 )
 
 func TestWriter(t *testing.T) {
-	cl, db, err := Backchannel(TestUser, TestPass, TestURI)
+	backchannel, db, err := Backchannel(TestUser, TestPass, TestURI)
 	CloudantAdaptor.Database = db.Name
 
 	c, err := CloudantAdaptor.Client()
@@ -20,9 +20,7 @@ func TestWriter(t *testing.T) {
 	s, err := c.Connect()
 	done := make(chan struct{})
 	defer func() {
-		cl.Delete(db.Name)
-		cl.LogOut()
-		cl.Stop()
+		Tidy(backchannel, db.Name)
 		c.(*Client).Close()
 		close(done)
 	}()
@@ -37,8 +35,6 @@ func TestWriter(t *testing.T) {
 		t.Errorf("Failed to start Cloudant Writer, %s", err)
 	}
 
-	defer wr.(*Writer).Close()
-
 	confirms := make(chan struct{})
 	var confirmed bool
 	go func() {
@@ -46,7 +42,7 @@ func TestWriter(t *testing.T) {
 		confirmed = true
 	}()
 
-	for i := 0; i < 999; i++ {
+	for i := 0; i < 10; i++ {
 		msg := message.From(ops.Insert, "bulk", map[string]interface{}{"foo": i, "i": i})
 		if _, err := wr.Write(message.WithConfirms(confirms, msg))(s); err != nil {
 			t.Errorf("unexpected Insert error, %s", err)

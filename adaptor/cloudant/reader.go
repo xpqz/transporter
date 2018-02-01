@@ -12,21 +12,14 @@ import (
 	"github.com/compose/transporter/message/ops"
 )
 
-var (
-	_ client.Reader = &Reader{}
-	_ client.Closer = &Reader{}
-)
+var _ client.Reader = &Reader{}
 
-// Reader fulfills the client.Reader interface for use with both copying and
-// tailing a Cloudant database.
+// Reader implements client.Reader
 type Reader struct{}
 
 func newReader() client.Reader {
 	return &Reader{}
 }
-
-// Close is called by client.Close() when it receives on the done channel.
-func (r *Reader) Close() {}
 
 // Read fulfils the Reader interface.
 func (r *Reader) Read(_ map[string]client.MessageSet, filterFn client.NsFilterFunc) client.MessageChanFunc {

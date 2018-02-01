@@ -12,15 +12,15 @@ const (
         "uri": "${CLOUDANT_URI}",
         "username": "username",
         "password": "password",
-        "database": "database",
+		"database": "database",
+		// Note: all cloudant URIs must be "cloudant://..."
 }`
 
 	description = "a Cloudant adaptor that functions as both source and sink"
 )
 
-var (
-	_ adaptor.Adaptor = &cloudant{}
-)
+// cloudant implements adaptor.Adaptor
+var _ adaptor.Adaptor = &cloudant{}
 
 // Cloudant is an adaptor that reads and writes records to Cloudant databases
 type cloudant struct {
@@ -35,7 +35,7 @@ func init() {
 	adaptor.Add(
 		"cloudant",
 		func() adaptor.Adaptor {
-			return &cloudant{NewEdits: true}
+			return &cloudant{}
 		},
 	)
 }
@@ -60,7 +60,7 @@ func (c *cloudant) Reader() (client.Reader, error) {
 }
 
 func (c *cloudant) Writer(done chan struct{}, wg *sync.WaitGroup) (client.Writer, error) {
-	return newWriter(c.cl.database), nil
+	return newWriter(), nil
 }
 
 // Description for Cloudant adaptor
