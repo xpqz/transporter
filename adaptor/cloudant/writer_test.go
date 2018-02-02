@@ -15,7 +15,7 @@ func TestWriter(t *testing.T) {
 
 	c, err := CloudantAdaptor.Client()
 	if err != nil {
-		t.Fatal("Failed to start Cloudant Client")
+		t.Fatal("failed to start Cloudant Client")
 	}
 
 	s, err := c.Connect()
@@ -27,13 +27,13 @@ func TestWriter(t *testing.T) {
 	}()
 
 	if err != nil {
-		t.Fatalf("unable to obtain session to cloudant, %s", err)
+		t.Fatalf("unable to obtain session to cloudant: %s", err)
 	}
 
 	var wg sync.WaitGroup
 	wr, err := CloudantAdaptor.Writer(done, &wg)
 	if err != nil {
-		t.Errorf("Failed to start Cloudant Writer, %s", err)
+		t.Errorf("failed to start Cloudant Writer: %s", err)
 	}
 
 	confirms, cleanup := adaptor.MockConfirmWrites()
@@ -42,7 +42,7 @@ func TestWriter(t *testing.T) {
 	for i := 0; i < 10; i++ {
 		msg := message.From(ops.Insert, "bulk", map[string]interface{}{"foo": i, "i": i})
 		if _, err := wr.Write(message.WithConfirms(confirms, msg))(s); err != nil {
-			t.Errorf("Write error: %s", err)
+			t.Errorf("write error: %s", err)
 		}
 	}
 }

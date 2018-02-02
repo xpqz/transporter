@@ -9,14 +9,14 @@ import (
 func TestReader(t *testing.T) {
 	backchannel, db, err := Backchannel(TestUser, TestPass, TestURI)
 	if err != nil {
-		t.Fatal("Failed to obtain backchannel")
+		t.Fatal("failed to obtain backchannel")
 	}
 
 	CloudantAdaptor.Database = db.Name
 	c, err := CloudantAdaptor.Client()
 	testDocCount := 10
 	if err != nil {
-		t.Fatal("Failed to start Cloudant Client")
+		t.Fatal("failed to start Cloudant Client")
 	}
 
 	s, err := c.Connect()
@@ -33,7 +33,7 @@ func TestReader(t *testing.T) {
 
 	rd, err := CloudantAdaptor.Reader()
 	if err != nil {
-		t.Errorf("Failed to start Cloudant Reader, %s", err)
+		t.Errorf("failed to start Cloudant Reader, %s", err)
 	}
 
 	// Make up some test data. Note that normal eventual consistency caveats
