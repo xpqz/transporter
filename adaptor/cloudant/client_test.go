@@ -20,13 +20,9 @@ import (
 	"crypto/rand"
 	"crypto/sha256"
 	"fmt"
-	"sync"
-	"testing"
-	"time"
 
 	cdt "github.com/cloudant-labs/go-cloudant"
 	"github.com/compose/transporter/adaptor"
-	"github.com/compose/transporter/client"
 )
 
 const (
@@ -42,34 +38,6 @@ var (
 		Password:   TestPass,
 	}
 )
-
-// This is rather crude -- expect problems if testing against a non-local
-// cluster.
-func CheckCount(desc string, expected int, msgChan <-chan client.MessageSet, t *testing.T) {
-	var numMsgs int
-	var wg sync.WaitGroup
-	wg.Add(1)
-	go func(wg *sync.WaitGroup) {
-		for {
-			select {
-			case <-msgChan:
-				numMsgs++
-			case <-time.After(1 * time.Second):
-				if numMsgs == expected {
-					wg.Done()
-					return
-				}
-			case <-time.After(5 * time.Second):
-				wg.Done()
-				return
-			}
-		}
-	}(&wg)
-	wg.Wait()
-	if numMsgs != expected {
-		t.Errorf("[%s] bad message count, expected %d, got %d\n", desc, expected, numMsgs)
-	}
-}
 
 func MakeDocs(docCount int) []interface{} {
 	// Insert 10 docs

@@ -4,6 +4,7 @@ import (
 	"sync"
 	"testing"
 
+	"github.com/compose/transporter/adaptor"
 	"github.com/compose/transporter/message"
 	"github.com/compose/transporter/message/ops"
 )
@@ -35,15 +36,11 @@ func TestWriter(t *testing.T) {
 		t.Errorf("Failed to start Cloudant Writer, %s", err)
 	}
 
-	confirms := make(chan struct{})
-	var confirmed bool
-	go func() {
-		<-confirms
-		confirmed = true
-	}()
+	confirms, cleanup := adaptor.MockConfirmWrites()
+	defer adaptor.VerifyWriteConfirmed(cleanup, t)
 
 	for i := 0; i < 10; i++ {
-		msg := message.From(ops.Update, "bulk", map[string]interface{}{"foo": i, "i": i})
+		msg := message.From(ops.Insert, "bulk", map[string]interface{}{"foo": i, "i": i})
 		if _, err := wr.Write(message.WithConfirms(confirms, msg))(s); err != nil {
 			t.Errorf("Write error: %s", err)
 		}
