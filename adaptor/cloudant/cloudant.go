@@ -13,6 +13,11 @@ const (
         "username": "username",
         "password": "password",
 		"database": "database",
+		//  "batchsize": int,         // Sink only
+		//  "batchtimeout": int,      // Sink only
+		//  "seqinterval": int,       // Source only
+		//  "tail": bool,             // Source only
+		//  "newedits": bool,         // Sink only
 		// Note: all cloudant URIs must be "cloudant://..."
 }`
 
@@ -22,13 +27,19 @@ const (
 // cloudant implements adaptor.Adaptor
 var _ adaptor.Adaptor = &cloudant{}
 
+const bufferSize = 1024 * 1024 // Cloudant has a max request size of 1M
+
 // Cloudant is an adaptor that reads and writes records to Cloudant databases
 type cloudant struct {
 	adaptor.BaseConfig
-	Database string `json:"database"`
-	Username string `json:"username"`
-	Password string `json:"password"`
-	cl       *Client
+	Database     string `json:"database"`
+	Username     string `json:"username"`
+	Password     string `json:"password"`
+	BatchSize    int    `json:"batchsize"`
+	BatchTimeout int    `json:"batchtimeout	"`
+	SeqInterval  int    `json:"seqinterval"`
+	NewEdits     bool   `json:"newedits"`
+	cl           *Client
 }
 
 func init() {
@@ -45,6 +56,10 @@ func (c *cloudant) Client() (client.Client, error) {
 		WithURI(c.URI),
 		WithDatabase(c.Database),
 		WithUser(c.Username),
+		WithBatchSize(c.BatchSize),
+		WithBatchTimeout(c.BatchTimeout),
+		WithNewEdits(c.NewEdits),
+		WithSeqInterval(c.SeqInterval),
 		WithPassword(c.Password),
 	)
 	if err != nil {
@@ -56,10 +71,13 @@ func (c *cloudant) Client() (client.Client, error) {
 }
 
 func (c *cloudant) Reader() (client.Reader, error) {
-	return newReader(), nil
+	return newReader(c.SeqInterval), nil
 }
 
 func (c *cloudant) Writer(done chan struct{}, wg *sync.WaitGroup) (client.Writer, error) {
+	if c.BatchSize > 0 {
+		return newBulker(done, wg, c.cl.database, c.BatchSize, c.BatchTimeout, c.NewEdits), nil
+	}
 	return newWriter(), nil
 }
 

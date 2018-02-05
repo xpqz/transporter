@@ -20,13 +20,16 @@ var (
 
 // Client creates and holds the session to Cloudant
 type Client struct {
-	client   *cdt.CouchClient
-	database *cdt.Database
-	bulker   *cdt.Uploader
-	dbName   string
-	uri      string
-	username string
-	password string
+	client       *cdt.CouchClient
+	database     *cdt.Database
+	dbName       string
+	uri          string
+	username     string
+	password     string
+	batchTimeout int
+	batchSize    int
+	seqInterval  int
+	newEdits     bool
 }
 
 // Session wraps the access points for consumption by Reader and Writer
@@ -92,6 +95,34 @@ func WithDatabase(db string) ClientOptionFunc {
 	}
 }
 
+func WithBatchSize(batchSize int) ClientOptionFunc {
+	return func(c *Client) error {
+		c.batchSize = batchSize
+		return nil
+	}
+}
+
+func WithBatchTimeout(batchTimeout int) ClientOptionFunc {
+	return func(c *Client) error {
+		c.batchTimeout = batchTimeout
+		return nil
+	}
+}
+
+func WithNewEdits(newEdits bool) ClientOptionFunc {
+	return func(c *Client) error {
+		c.newEdits = newEdits
+		return nil
+	}
+}
+
+func WithSeqInterval(seqInterval int) ClientOptionFunc {
+	return func(c *Client) error {
+		c.seqInterval = seqInterval
+		return nil
+	}
+}
+
 // Connect wraps the underlying session to the Cloudant database
 func (c *Client) Connect() (client.Session, error) {
 	if c.database == nil {
@@ -103,6 +134,7 @@ func (c *Client) Connect() (client.Session, error) {
 		client:   c.client,
 		dbName:   c.dbName,
 		database: c.database,
+		bulker:   c.bulker,
 	}, nil
 }
 
