@@ -1,20 +1,19 @@
 package cloudant
 
-// The Cloudant Reader uses the Changes() functionality in the Cloudant
-// client library.
+// The Cloudant Reader uses the Follower functionality in the go-cloudant
+// client library in order to tail a continuous changes feed.
 
 import (
-	"strings"
-
 	cdt "github.com/cloudant-labs/go-cloudant"
 	"github.com/compose/transporter/client"
+	"github.com/compose/transporter/log"
 	"github.com/compose/transporter/message"
 	"github.com/compose/transporter/message/ops"
 )
 
 var _ client.Reader = &Tailer{}
 
-// Reader implements client.Reader
+// Tailer implements client.Reader
 type Tailer struct {
 	seqInterval int
 }
@@ -23,91 +22,64 @@ func newTailer(seqInterval int) *Tailer {
 	return &Tailer{seqInterval}
 }
 
-// Read fulfils the Reader interface.
-func (t *Tailer) Read(_ map[string]client.MessageSet, filterFn client.NsFilterFunc) client.MessageChanFunc {
+// Read tails a continuous changes feed
+func (t *Tailer) Read(resumeMap map[string]client.MessageSet, filterFn client.NsFilterFunc) client.MessageChanFunc {
 	return func(s client.Session, done chan struct{}) (chan client.MessageSet, error) {
+
 		out := make(chan client.MessageSet)
 		session := s.(*Session)
-
-		follower := cdt.NewFollower(db, t.seqInterval)
-		changes, err := follower.Follow()
-		if err != nil {
-    		return nil, err
-		}
+		follower := cdt.NewFollower(session.database, t.seqInterval)
 
 		go func() {
 			defer close(out)
-			select <- done:
+			defer follower.Close()
+
+			changes, err := t.follower.Follow()
+			if err != nil {
+				log.With("db", session.dbName).
+					With("err", err).
+					Infoln("failed to open changes feed")
 				return
-			default:
-				for {
-					changeEvent := <-changes
-
-					switch changeEvent.EventType {
-					case cdt.ChangesHeartbeat:
-						fmt.Println("tick")
-					case cdt.ChangesError:
-						fmt.Println(changeEvent.Err)
-					case cdt.ChangesTerminated:
-						fmt.Println("terminated; resuming from last known sequence id")
-						changes, err = follower.Follow()
-						if err != nil {
-							fmt.Println("resumption error ", err)
-							return
-						}
-					case cdt.ChangesInsert:
-						fmt.Printf("INSERT %s\n", changeEvent.Meta.ID)
-					case cdt.ChangesDelete:
-						fmt.Printf("DELETE %s\n", changeEvent.Meta.ID)
-					default:
-						fmt.Printf("UPDATE %s\n", changeEvent.Meta.ID)
-					}
-				}
-		}()
-
-		query := cdt.NewChangesQuery().
-			IncludeDocs().
-			Feed("continuous")
-
-		if t.seqInterval > 0 {
-			query = query.SeqInterval(t.seqInterval)
-		}
-
-		changes, err := session.database.Changes(query.Build())
-		if err != nil {
-			return nil, err
-		}
-
-		go func() {
-			defer close(out)
-
+			}
 			for {
 				select {
 				case <-done:
+					log.With("db", session.dbName).
+						Infoln("terminating normally")
 					return
-				case change, more := <-changes:
-					if !more {
-						return
+				case event := <-changes:
+					var msg message.Msg
+					switch event.EventType {
+					case cdt.ChangesHeartbeat:
+						continue
+					case cdt.ChangesError:
+						log.With("db", session.dbName).
+							With("err", event.Err).
+							Infoln("changes error; skipping")
+						continue
+					case cdt.ChangesTerminated:
+						log.With("db", session.dbName).
+							Infoln("remote end terminated; resuming")
+						changes, err = t.follower.Follow()
+						if err != nil {
+							log.With("db", session.dbName).
+								With("err", err).
+								Infoln("resumption error; giving up")
+							return
+						}
+						continue
+					case cdt.ChangesInsert:
+						msg = message.From(ops.Insert, session.dbName, event.Doc)
+					case cdt.ChangesDelete:
+						msg = message.From(ops.Delete, session.dbName, event.Doc)
+					default:
+						msg = message.From(ops.Update, session.dbName, event.Doc)
 					}
-					if change != nil && filterFn(session.dbName) {
-						out <- client.MessageSet{Msg: makeMessage(change, session.dbName)}
-					}
+					out <- client.MessageSet{Msg: msg}
 				}
 			}
 		}()
 
 		return out, nil
 	}
-}
-
-func makeMessage(change *cdt.Change, db string) message.Msg {
-	if change.Deleted {
-		return message.From(ops.Delete, db, change.Doc)
-	}
-
-	if strings.HasPrefix(change.Rev, "1-") {
-		return message.From(ops.Insert, db, change.Doc)
-	}
-
-	return message.From(ops.Update, db, change.Doc)
 }

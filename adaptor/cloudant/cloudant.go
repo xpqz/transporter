@@ -39,6 +39,7 @@ type cloudant struct {
 	BatchTimeout int    `json:"batchtimeout	"`
 	SeqInterval  int    `json:"seqinterval"`
 	NewEdits     bool   `json:"newedits"`
+	Tail         bool   `json:"tail"`
 	cl           *Client
 }
 
@@ -71,7 +72,10 @@ func (c *cloudant) Client() (client.Client, error) {
 }
 
 func (c *cloudant) Reader() (client.Reader, error) {
-	return newReader(c.SeqInterval), nil
+	if c.Tail {
+		return newTailer(c.SeqInterval)
+	}
+	return newReader(), nil
 }
 
 func (c *cloudant) Writer(done chan struct{}, wg *sync.WaitGroup) (client.Writer, error) {
