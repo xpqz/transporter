@@ -39,7 +39,7 @@ type cloudant struct {
 	BatchSize    int           `json:"batchsize"`
 	BatchTimeout time.Duration `json:"batchtimeout"`
 	SeqInterval  int           `json:"seqinterval"`
-	NewEdits     bool          `json:"newedits"`
+	NewEdits     bool          `json:"newedits,omitempty"`
 	Tail         bool          `json:"tail"`
 	cl           *Client
 }

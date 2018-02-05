@@ -108,11 +108,9 @@ func (b *Bulker) drain(database *cdt.Database) error {
 
 func (b *Bulker) flush(database *cdt.Database) error {
 	result, err := cdt.UploadBulkDocs(&cdt.BulkDocsRequest{Docs: b.buffer, NewEdits: b.newEdits}, database)
-	defer result.Close()
-
-	// Recycle the buffer when done
 	defer func() {
-		b.buffer = []interface{}{}
+		result.Close()
+		b.buffer = []interface{}{} // Recycle the buffer, as this batch is done
 	}()
 
 	if err != nil {
@@ -124,11 +122,9 @@ func (b *Bulker) flush(database *cdt.Database) error {
 		return fmt.Errorf("unexpected HTTP return code, %d", response.StatusCode)
 	}
 
-	// Check that we got valid JSON back. We don't look at the actual data.
-	responses := []cdt.BulkDocsResponse{}
-	err = json.NewDecoder(response.Body).Decode(&responses)
-
-	return err
+	// Check that we got valid JSON back. We don't look at the actual data, only
+	// the returned error, if any
+	return json.NewDecoder(response.Body).Decode(&[]cdt.BulkDocsResponse{})
 }
 
 func isBulkable(msg message.Msg) (data.Data, error) {
