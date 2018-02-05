@@ -1,6 +1,6 @@
 package cloudant
 
-// The Cloudant Writer implementation.
+// The Cloudant Bulk Writer implementation.
 //
 // This writer uses a configurable buffer and the Cloudant _bulk_docs API.
 // It is the most efficient way of loading larger document counts into
@@ -34,7 +34,7 @@ type Bulker struct {
 
 func newBulker(done chan struct{}, wg *sync.WaitGroup, db *cdt.Database, size int, dur time.Duration, newEdits bool) *Bulker {
 	b := &Bulker{
-		buffer:       make([]interface{}, size),
+		buffer:       []interface{}{},
 		RWMutex:      &sync.RWMutex{},
 		batchSize:    size,
 		batchTimeout: dur,
@@ -50,7 +50,8 @@ func newBulker(done chan struct{}, wg *sync.WaitGroup, db *cdt.Database, size in
 	return b
 }
 
-// Write queues the insert, update or delete of a message for future processing
+// Write queues the insert, update or delete of a message for future processing.
+// If the buffer has reached its max occupancy, we trigger a flush.
 func (b *Bulker) Write(msg message.Msg) func(client.Session) (message.Msg, error) {
 	return func(s client.Session) (message.Msg, error) {
 		b.Lock()
@@ -58,8 +59,8 @@ func (b *Bulker) Write(msg message.Msg) func(client.Session) (message.Msg, error
 		db := s.(*Session).database
 		doc, err := isBulkable(msg)
 
-		if err != nil {
-			b.buffer[len(b.buffer)] = doc
+		if err == nil {
+			b.buffer = append(b.buffer, doc)
 			if len(b.buffer) >= b.batchSize {
 				err = b.flush(db)
 				if err == nil && b.confirmChan != nil {
@@ -77,15 +78,14 @@ func (b *Bulker) run(done chan struct{}, wg *sync.WaitGroup, database *cdt.Datab
 	for {
 		select {
 		case <-time.After(b.batchTimeout * time.Second):
-			log.With("db", database.Name).
-				Debugln("draining upload buffer on time interval")
+			log.Debugln("draining upload buffer on time interval")
 			if err := b.drain(database); err != nil {
 				log.Errorf("time interval drain error, %s", err)
 				return
 			}
 
 		case <-done:
-			log.Debugln("draining upload buffer: received done channel")
+			log.Debugln("draining upload buffer: received on done channel")
 			if err := b.drain(database); err != nil {
 				log.Errorf("done channel drain error, %s", err)
 			}
@@ -112,7 +112,7 @@ func (b *Bulker) flush(database *cdt.Database) error {
 
 	// Recycle the buffer when done
 	defer func() {
-		b.buffer = make([]interface{}, b.batchSize)
+		b.buffer = []interface{}{}
 	}()
 
 	if err != nil {
