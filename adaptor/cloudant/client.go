@@ -2,6 +2,7 @@ package cloudant
 
 import (
 	"net/url"
+	"time"
 
 	cdt "github.com/cloudant-labs/go-cloudant"
 	"github.com/compose/transporter/client"
@@ -26,7 +27,7 @@ type Client struct {
 	uri          string
 	username     string
 	password     string
-	batchTimeout int
+	batchTimeout time.Duration
 	batchSize    int
 	seqInterval  int
 	newEdits     bool
@@ -102,7 +103,7 @@ func WithBatchSize(batchSize int) ClientOptionFunc {
 	}
 }
 
-func WithBatchTimeout(batchTimeout int) ClientOptionFunc {
+func WithBatchTimeout(batchTimeout time.Duration) ClientOptionFunc {
 	return func(c *Client) error {
 		c.batchTimeout = batchTimeout
 		return nil
@@ -134,7 +135,6 @@ func (c *Client) Connect() (client.Session, error) {
 		client:   c.client,
 		dbName:   c.dbName,
 		database: c.database,
-		bulker:   c.bulker,
 	}, nil
 }
 

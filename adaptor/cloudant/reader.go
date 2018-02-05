@@ -1,7 +1,9 @@
 package cloudant
 
 // The Cloudant Reader uses the Changes() functionality in the Cloudant
-// client library.
+// client library. It grabs the whole changes feed in one go. You should
+// probably look at the tailing version (tailer.go) for more demanding
+// workloads.
 
 import (
 	"strings"

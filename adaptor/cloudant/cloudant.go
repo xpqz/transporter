@@ -2,6 +2,7 @@ package cloudant
 
 import (
 	"sync"
+	"time"
 
 	"github.com/compose/transporter/adaptor"
 	"github.com/compose/transporter/client"
@@ -32,14 +33,14 @@ const bufferSize = 1024 * 1024 // Cloudant has a max request size of 1M
 // Cloudant is an adaptor that reads and writes records to Cloudant databases
 type cloudant struct {
 	adaptor.BaseConfig
-	Database     string `json:"database"`
-	Username     string `json:"username"`
-	Password     string `json:"password"`
-	BatchSize    int    `json:"batchsize"`
-	BatchTimeout int    `json:"batchtimeout	"`
-	SeqInterval  int    `json:"seqinterval"`
-	NewEdits     bool   `json:"newedits"`
-	Tail         bool   `json:"tail"`
+	Database     string        `json:"database"`
+	Username     string        `json:"username"`
+	Password     string        `json:"password"`
+	BatchSize    int           `json:"batchsize"`
+	BatchTimeout time.Duration `json:"batchtimeout"`
+	SeqInterval  int           `json:"seqinterval"`
+	NewEdits     bool          `json:"newedits"`
+	Tail         bool          `json:"tail"`
 	cl           *Client
 }
 
@@ -73,7 +74,7 @@ func (c *cloudant) Client() (client.Client, error) {
 
 func (c *cloudant) Reader() (client.Reader, error) {
 	if c.Tail {
-		return newTailer(c.SeqInterval)
+		return newTailer(c.SeqInterval), nil
 	}
 	return newReader(), nil
 }

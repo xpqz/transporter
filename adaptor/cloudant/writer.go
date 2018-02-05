@@ -1,6 +1,9 @@
 package cloudant
 
-// The Cloudant Writer implementation
+// The Cloudant Writer implementation.
+//
+// This writes one message at a time. For real workloads, you will want to
+// use the bulk loader (bulk.go)
 
 import (
 	"fmt"

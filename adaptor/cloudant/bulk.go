@@ -1,6 +1,10 @@
 package cloudant
 
-// The Cloudant Writer implementation
+// The Cloudant Writer implementation.
+//
+// This writer uses a configurable buffer and the Cloudant _bulk_docs API.
+// It is the most efficient way of loading larger document counts into
+// a Cloudant database.
 
 import (
 	"encoding/json"
@@ -16,32 +20,32 @@ import (
 	"github.com/compose/transporter/message/ops"
 )
 
-var _ client.Writer = &Bulk{}
+var _ client.Writer = &Bulker{}
 
-// Bulk implements client.Writer
-type Bulk struct {
+// Bulker implements client.Writer
+type Bulker struct {
 	buffer []interface{}
 	*sync.RWMutex
 	confirmChan  chan struct{}
 	batchSize    int
-	batchTimeout int
+	batchTimeout time.Duration
 	newEdits     bool
 }
 
-func newBulker(done chan struct{}, wg *sync.WaitGroup, database *cdt.Database, batchSize int, batchTimeout int, newEdits bool) *Bulk {
-	b := &Bulk{
-		buffer:       make([]interface{}, batchSize),
+func newBulker(done chan struct{}, wg *sync.WaitGroup, db *cdt.Database, size int, dur time.Duration, newEdits bool) *Bulker {
+	b := &Bulker{
+		buffer:       make([]interface{}, size),
 		RWMutex:      &sync.RWMutex{},
-		batchSize:    batchSize,
-		batchTimeout: batchTimeout,
+		batchSize:    size,
+		batchTimeout: dur,
 		newEdits:     newEdits,
 	}
 
 	wg.Add(1)
-	if batchTimeout <= 0 {
+	if dur <= 0 {
 		b.batchTimeout = 2
 	}
-	go b.run(done, wg, database)
+	go b.run(done, wg, db)
 
 	return b
 }
@@ -51,29 +55,14 @@ func (b *Bulker) Write(msg message.Msg) func(client.Session) (message.Msg, error
 	return func(s client.Session) (message.Msg, error) {
 		b.Lock()
 		b.confirmChan = msg.Confirms()
-
 		db := s.(*Session).database
-		var (
-			err error
-			doc data.Data
-		)
-
-		switch msg.OP() {
-		case ops.Delete:
-			doc, err = deleteDoc(msg.Data())
-		case ops.Update:
-			doc, err = updateDoc(msg.Data())
-		default:
-			doc = msg.Data()
-		}
+		doc, err := isBulkable(msg)
 
 		if err != nil {
 			b.buffer[len(b.buffer)] = doc
-			if len(b.buffer) >= b.maxDoc {
+			if len(b.buffer) >= b.batchSize {
 				err = b.flush(db)
-				if err != nil {
-					log.With("database", db.Name).Errorf("bulk upload error, %s\n", err)
-				} else if b.confirmChan != nil {
+				if err == nil && b.confirmChan != nil {
 					b.confirmChan <- struct{}{}
 				}
 			}
@@ -83,26 +72,29 @@ func (b *Bulker) Write(msg message.Msg) func(client.Session) (message.Msg, error
 	}
 }
 
-func (b *Bulk) run(done chan struct{}, wg *sync.WaitGroup, database *cdt.Database) {
+func (b *Bulker) run(done chan struct{}, wg *sync.WaitGroup, database *cdt.Database) {
 	defer wg.Done()
 	for {
 		select {
 		case <-time.After(b.batchTimeout * time.Second):
+			log.With("db", database.Name).
+				Debugln("draining upload buffer on time interval")
 			if err := b.drain(database); err != nil {
-				log.Errorf("flush error, %s", err)
+				log.Errorf("time interval drain error, %s", err)
 				return
 			}
+
 		case <-done:
-			log.Debugln("received done channel")
+			log.Debugln("draining upload buffer: received done channel")
 			if err := b.drain(database); err != nil {
-				log.Errorf("flush error, %s", err)
+				log.Errorf("done channel drain error, %s", err)
 			}
 			return
 		}
 	}
 }
 
-func (b *Bulk) drain(database *cdt.Database) error {
+func (b *Bulker) drain(database *cdt.Database) error {
 	b.Lock()
 	err := b.flush(database)
 	if err == nil {
@@ -114,9 +106,11 @@ func (b *Bulk) drain(database *cdt.Database) error {
 	return err
 }
 
-func (b *Bulk) flush(database *cdt.Database) error {
+func (b *Bulker) flush(database *cdt.Database) error {
 	result, err := cdt.UploadBulkDocs(&cdt.BulkDocsRequest{Docs: b.buffer, NewEdits: b.newEdits}, database)
 	defer result.Close()
+
+	// Recycle the buffer when done
 	defer func() {
 		b.buffer = make([]interface{}, b.batchSize)
 	}()
@@ -125,52 +119,38 @@ func (b *Bulk) flush(database *cdt.Database) error {
 		return err
 	}
 
-	if result == nil {
-		return fmt.Errorf("batch upload yielded no result")
+	response := result.Response()
+	if response.StatusCode != 201 && response.StatusCode != 202 {
+		return fmt.Errorf("unexpected HTTP return code, %d", response.StatusCode)
 	}
 
-	if result.response.StatusCode != 201 && result.response.StatusCode != 202 {
-		return fmt.Errorf("unexpected HTTP return code, %d", result.response.StatusCode)
-	}
-
-	if result.response == nil {
-		return fmt.Errorf("batch upload nil response")
-	}
-
+	// Check that we got valid JSON back. We don't look at the actual data.
 	responses := []cdt.BulkDocsResponse{}
-	err = json.NewDecoder(result.response.Body).Decode(&responses)
-	if err != nil {
-		return err
-	}
+	err = json.NewDecoder(response.Body).Decode(&responses)
 
-	return nil
+	return err
 }
 
-func updateDoc(database *cdt.Database, doc data.Data) error {
-	_, hasID := doc.Has("_id")
-	_, hasRev := doc.Has("_rev")
-	if hasID && hasRev {
-		return doc, nil
-	}
+func isBulkable(msg message.Msg) (data.Data, error) {
+	doc := msg.Data()
 
-	return fmt.Errorf("Document needs both _id and _rev to update")
-}
-
-// deleteDoc verifies that the doc has both _id and _rev and then returns
-// a new doc containing only _id, _rev, and _deleted: true which can be
-// used by the Cloudant _bulk_docs endpoint to delete a doc as part of
-// a larger batch
-func deleteDoc(database *cdt.Database, doc data.Data) error {
 	ID, hasID := doc.Has("_id")
 	rev, hasRev := doc.Has("_rev")
 
-	newDoc := &data.Data{}
+	op := msg.OP()
+	if op == ops.Delete || op == ops.Update {
+		if !hasID || !hasRev {
+			return doc, fmt.Errorf("Document needs both _id and _rev")
+		}
+	}
 
-	if hasID && hasRev {
+	if op == ops.Delete {
+		newDoc := data.Data{}
 		newDoc.Set("_id", ID)
 		newDoc.Set("_rev", rev)
 		newDoc.Set("_deleted", true)
 		return newDoc, nil
 	}
-	return doc, fmt.Errorf("Document needs both _id and _rev to delete")
+
+	return doc, nil
 }

@@ -34,7 +34,7 @@ func (t *Tailer) Read(resumeMap map[string]client.MessageSet, filterFn client.Ns
 			defer close(out)
 			defer follower.Close()
 
-			changes, err := t.follower.Follow()
+			changes, err := follower.Follow()
 			if err != nil {
 				log.With("db", session.dbName).
 					With("err", err).
@@ -60,7 +60,7 @@ func (t *Tailer) Read(resumeMap map[string]client.MessageSet, filterFn client.Ns
 					case cdt.ChangesTerminated:
 						log.With("db", session.dbName).
 							Infoln("remote end terminated; resuming")
-						changes, err = t.follower.Follow()
+						changes, err = follower.Follow()
 						if err != nil {
 							log.With("db", session.dbName).
 								With("err", err).
