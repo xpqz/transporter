@@ -48,7 +48,7 @@ func init() {
 	adaptor.Add(
 		"cloudant",
 		func() adaptor.Adaptor {
-			return &cloudant{}
+			return &cloudant{NewEdits: true}
 		},
 	)
 }

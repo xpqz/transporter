@@ -12,6 +12,7 @@ import (
 func TestWriter(t *testing.T) {
 	backchannel, db, err := Backchannel(TestUser, TestPass, TestURI)
 	CloudantAdaptor.Database = db.Name
+	CloudantAdaptor.NewEdits = true
 
 	c, err := CloudantAdaptor.Client()
 	if err != nil {

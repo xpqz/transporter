@@ -17,6 +17,7 @@ package cloudant
 // % curl -XPUT $HOST/testdb -u admin
 
 import (
+	"crypto/md5"
 	"crypto/rand"
 	"crypto/sha256"
 	"fmt"
@@ -36,6 +37,7 @@ var (
 		BaseConfig: adaptor.BaseConfig{URI: DefaultURI},
 		Username:   TestUser,
 		Password:   TestPass,
+		NewEdits:   true,
 	}
 )
 
@@ -71,6 +73,10 @@ func DbName() string {
 	return fmt.Sprintf("transporter-%x", sha256.Sum256([]byte(UUIDIsh())))
 }
 
+func RevOrIDIsh() string {
+	return fmt.Sprintf("%x", md5.Sum([]byte(UUIDIsh())))
+}
+
 func Tidy(cl *cdt.CouchClient, dbName string) {
 	cl.Delete(dbName)
 	cl.LogOut()
@@ -88,4 +94,24 @@ func Backchannel(username, password, baseURL string) (*cdt.CouchClient, *cdt.Dat
 	}
 
 	return client, database, nil
+}
+
+func AllDocs(db *cdt.Database) []cdt.DocumentMeta {
+	query := cdt.NewAllDocsQuery().Build()
+	rows, _ := db.All(query)
+	docs := []cdt.DocumentMeta{}
+
+	for {
+		row, more := <-rows
+		if more {
+			docs = append(docs, cdt.DocumentMeta{
+				ID:  row.ID,
+				Rev: row.Value.Rev,
+			})
+		} else {
+			break
+		}
+	}
+
+	return docs
 }

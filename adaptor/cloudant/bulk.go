@@ -7,7 +7,6 @@ package cloudant
 // a Cloudant database.
 
 import (
-	"encoding/json"
 	"fmt"
 	"sync"
 	"time"
@@ -117,14 +116,14 @@ func (b *Bulker) flush(database *cdt.Database) error {
 		return err
 	}
 
+	// Check that we get a 2XX response, but Transporter need not care about
+	// the actual response body
 	response := result.Response()
 	if response.StatusCode != 201 && response.StatusCode != 202 {
 		return fmt.Errorf("unexpected HTTP return code, %d", response.StatusCode)
 	}
 
-	// Check that we got valid JSON back. We don't look at the actual data, only
-	// the returned error, if any
-	return json.NewDecoder(response.Body).Decode(&[]cdt.BulkDocsResponse{})
+	return nil
 }
 
 func isBulkable(msg message.Msg) (data.Data, error) {

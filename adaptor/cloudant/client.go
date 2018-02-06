@@ -45,7 +45,10 @@ type ClientOptionFunc func(*Client) error
 
 // NewClient creates a Cloudant client
 func NewClient(options ...ClientOptionFunc) (*Client, error) {
-	c := &Client{uri: DefaultURI}
+	c := &Client{
+		uri:      DefaultURI,
+		newEdits: true,
+	}
 
 	for _, option := range options {
 		if err := option(c); err != nil {
