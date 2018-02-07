@@ -128,6 +128,8 @@ func TestBulkMixedOps(t *testing.T) {
 	}
 }
 
+// TestBulkNoNewEditsRetainsRevs tests that we can insert docs with a given
+// rev without generating update conflicts, provided we run with newEdits=false
 func TestBulkNoNewEditsRetainsRevs(t *testing.T) {
 	testDocCount := 105
 	backchannel, db, err := Backchannel(TestUser, TestPass, TestURI)

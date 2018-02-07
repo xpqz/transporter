@@ -42,7 +42,6 @@ var (
 )
 
 func MakeDocs(docCount int) []interface{} {
-	// Insert 10 docs
 	docs := make([]interface{}, docCount)
 	for i := 0; i < docCount; i++ {
 		docs[i] = struct {

@@ -6,6 +6,7 @@ package cloudant
 import (
 	cdt "github.com/cloudant-labs/go-cloudant"
 	"github.com/compose/transporter/client"
+	"github.com/compose/transporter/commitlog"
 	"github.com/compose/transporter/log"
 	"github.com/compose/transporter/message"
 	"github.com/compose/transporter/message/ops"
@@ -23,9 +24,8 @@ func newTailer(seqInterval int) *Tailer {
 }
 
 // Read tails a continuous changes feed
-func (t *Tailer) Read(resumeMap map[string]client.MessageSet, filterFn client.NsFilterFunc) client.MessageChanFunc {
+func (t *Tailer) Read(_ map[string]client.MessageSet, filterFn client.NsFilterFunc) client.MessageChanFunc {
 	return func(s client.Session, done chan struct{}) (chan client.MessageSet, error) {
-
 		out := make(chan client.MessageSet)
 		session := s.(*Session)
 		follower := cdt.NewFollower(session.database, t.seqInterval)
@@ -75,7 +75,10 @@ func (t *Tailer) Read(resumeMap map[string]client.MessageSet, filterFn client.Ns
 					default:
 						msg = message.From(ops.Update, session.dbName, event.Doc)
 					}
-					out <- client.MessageSet{Msg: msg}
+					out <- client.MessageSet{
+						Msg:  msg,
+						Mode: commitlog.Sync,
+					}
 				}
 			}
 		}()

@@ -10,6 +10,7 @@ import (
 
 	cdt "github.com/cloudant-labs/go-cloudant"
 	"github.com/compose/transporter/client"
+	"github.com/compose/transporter/commitlog"
 	"github.com/compose/transporter/message"
 	"github.com/compose/transporter/message/ops"
 )
@@ -50,7 +51,10 @@ func (r *Reader) Read(_ map[string]client.MessageSet, filterFn client.NsFilterFu
 						return
 					}
 					if change != nil && filterFn(session.dbName) {
-						out <- client.MessageSet{Msg: makeMessage(change, session.dbName)}
+						out <- client.MessageSet{
+							Msg:  makeMessage(change, session.dbName),
+							Mode: commitlog.Sync,
+						}
 					}
 				}
 			}
