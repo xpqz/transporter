@@ -106,6 +106,10 @@ func (b *Bulker) drain(database *cdt.Database) error {
 }
 
 func (b *Bulker) flush(database *cdt.Database) error {
+	if len(b.buffer) == 0 {
+		return nil
+	}
+
 	result, err := cdt.UploadBulkDocs(&cdt.BulkDocsRequest{Docs: b.buffer, NewEdits: b.newEdits}, database)
 	defer func() {
 		result.Close()
