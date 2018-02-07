@@ -129,11 +129,6 @@ func WithSeqInterval(seqInterval int) ClientOptionFunc {
 
 // Connect wraps the underlying session to the Cloudant database
 func (c *Client) Connect() (client.Session, error) {
-	if c.database == nil {
-		if err := c.initConnection(); err != nil {
-			return nil, err
-		}
-	}
 	return &Session{
 		client:   c.client,
 		dbName:   c.dbName,
