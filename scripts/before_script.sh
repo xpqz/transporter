@@ -76,7 +76,7 @@ case "$TESTDIR" in
 ;;
 'adaptor/cloudant/...')
   echo "Configuring cloudant"
-  # Create an account-level user
+  # Create an account-level user to disable admin party
   curl -X PUT $COUCH_HOST_URL/_config/admins/$COUCH_USER -d '"'$COUCH_PASS'"'
 ;;
 *)
