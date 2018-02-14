@@ -12,6 +12,7 @@ env:
   - ES_V5_URL=http://127.0.0.1:9205
   - ES_V2_URL=http://127.0.0.1:9202
   - ES_V1_URL=http://127.0.0.1:9201
+  - COUCH_HOST_URL=http://localhost:5984 COUCH_USER=anna COUCH_PASS=secret
   matrix:
   - TESTDIR="adaptor, adaptor/all, adaptor/file/..., client/..., commitlog/..., events/..."
   - TESTDIR="function/..., log/..., message/..., offset/..., pipe/..., pipeline/..."
@@ -20,6 +21,7 @@ env:
   - TESTDIR=adaptor/postgres/...
   - TESTDIR=adaptor/rabbitmq/...
   - TESTDIR=adaptor/rethinkdb/...
+  - TESTDIR=adaptor/cloudant/...
 before_install:
 - go get github.com/golang/lint/golint
 - "./scripts/before_install.sh"
@@ -47,3 +49,5 @@ branches:
 notifications:
   slack:
     secure: R8wvRnq0DcxiFNgUvJ3npnzY2LzU8uVyF8enqfxXNuSR3jRC2tqUosB5Qzb1CCiNicmpEwj3VTcwTozzCwcqckysFek3Pp2/oxYL8tRjqxks1zUeMHVv204l83Js8PAFVhODCQjIxZNQCdUM2fQ9q46MvdY7V8h/wGTbQKq1ZLE=
+services:
+  - couchdb

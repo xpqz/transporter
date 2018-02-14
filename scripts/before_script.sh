@@ -74,6 +74,11 @@ case "$TESTDIR" in
   # seed database with users and role
   mongo mongodb://transporter:transporter@127.0.0.1:10000,127.0.0.1:10001/admin?replicaSet=authRepl0 config/mongodb/scripts/setup_users_and_roles.js
 ;;
+'adaptor/cloudant/...')
+  echo "Configuring cloudant"
+  # Create an account-level user
+  curl -X PUT $COUCH_HOST_URL/_config/admins/$COUCH_USER -d '"'$COUCH_PASS'"'
+;;
 *)
   echo "no setup required for $TESTDIR"
 ;;
